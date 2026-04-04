@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - Stock Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-bar {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .back-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 6px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        .app-info {
+            flex: 1;
+        }
+
+        .app-info .app-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e6edf3;
+            font-family: -apple-system, sans-serif;
+        }
+
+        .app-info .app-desc {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 2px;
+        }
+
+        .status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #21262d;
+            color: #8b949e;
+        }
+
+        .status.running {
+            background: #0d4429;
+            color: #3fb950;
+        }
+
+        .status.connected {
+            background: #0d4429;
+            color: #3fb950;
+        }
+
+        .terminal-wrapper {
+            flex: 1;
+            overflow: hidden;
+            padding: 12px;
+        }
+
+        #terminal {
+            height: 100%;
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 12px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        #terminal::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        #terminal::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+
+        #terminal::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        /* ANSI颜色 */
+        .term-red { color: #ff7b72; }
+        .term-green { color: #3fb950; }
+        .term-yellow { color: #d29922; }
+        .term-blue { color: #58a6ff; }
+        .term-magenta { color: #bc8cff; }
+        .term-cyan { color: #39c5cf; }
+        .term-white { color: #e6edf3; }
+        .term-bright { color: #ffffff; font-weight: bold; }
+        .term-dim { color: #8b949e; }
+        .term-reset { color: #e6edf3; }
+        .term-bold { font-weight: bold; }
+
+        /* 光标闪烁 */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: #58a6ff;
+            animation: blink 1s step-end infinite;
+            vertical-align: bottom;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .actions {
+            padding: 8px 20px;
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .action-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: -apple-system, sans-serif;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #30363d;
+        }
+
+        .action-btn.danger {
+            border-color: #f85149;
+            color: #f85149;
+        }
+
+        .action-btn.danger:hover {
+            background: #f8514922;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <a href="/" class="back-btn">← 返回</a>
+        <div class="app-info">
+            <div class="app-name">{{ app_name }}</div>
+            <div class="app-desc">{{ app_desc }}</div>
+        </div>
+        <div class="status" id="status">正在连接...</div>
+    </div>
+
+    <div class="terminal-wrapper">
+        <div id="terminal"></div>
+    </div>
+
+    <div class="actions">
+        <button class="action-btn" onclick="sendKey('\x03')">Ctrl+C 中断</button>
+        <button class="action-btn" onclick="clearTerm()">清屏</button>
+        <button class="action-btn danger" onclick="restartApp()">重启</button>
+    </div>
+
+    <script>
+        const appId = "{{ app_id }}";
+        const termEl = document.getElementById("terminal");
+        const statusEl = document.getElementById("status");
+        let ws = null;
+        let inputBuffer = "";
+
+        // ANSI到CSS的映射
+        const ANSI_STYLES = {
+            0: "",  // reset
+            1: "font-weight:bold", // bold
+            2: "opacity:0.7", // dim
+            30: "color:#8b949e", // black
+            31: "color:#ff7b72", // red
+            32: "color:#3fb950", // green
+            33: "color:#d29922", // yellow
+            34: "color:#58a6ff", // blue
+            35: "color:#bc8cff", // magenta
+            36: "color:#39c5cf", // cyan
+            37: "color:#e6edf3", // white
+            39: "color:#e6edf3", // reset foreground
+            90: "color:#8b949e", // bright black
+            91: "color:#ff7b72", // bright red
+            92: "color:#3fb950", // bright green
+            93: "color:#d29922", // bright yellow
+            94: "color:#58a6ff", // bright blue
+            95: "color:#bc8cff", // bright magenta
+            96: "color:#39c5cf", // bright cyan
+            97: "color:#ffffff", // bright white
+        };
+
+        function parseANSI(text) {
+            // 处理ANSI转义序列，转换为HTML
+            let result = "";
+            let i = 0;
+            let openSpans = [];
+            let currentStyle = "";
+
+            // 颜色别名
+            const colorMap = {
+                "\033[91m": "color:#ff7b72",
+                "\033[92m": "color:#3fb950",
+                "\033[93m": "color:#d29922",
+                "\033[94m": "color:#58a6ff",
+                "\033[95m": "color:#bc8cff",
+                "\033[96m": "color:#39c5cf",
+                "\033[97m": "color:#ffffff",
+                "\033[1m": "font-weight:bold",
+                "\033[0m": "",
+                "\033[0;91m": "color:#ff7b72",
+                "\033[0;92m": "color:#3fb950",
+                "\033[0;93m": "color:#d29922",
+                "\033[0;94m": "color:#58a6ff",
+                "\033[0;95m": "color:#bc8cff",
+                "\033[0;96m": "color:#39c5cf",
+                "\033[0;97m": "color:#ffffff",
+                "\033[1;91m": "font-weight:bold;color:#ff7b72",
+                "\033[1;92m": "font-weight:bold;color:#3fb950",
+                "\033[1;93m": "font-weight:bold;color:#d29922",
+                "\033[1;94m": "font-weight:bold;color:#58a6ff",
+                "\033[1;95m": "font-weight:bold;color:#bc8cff",
+                "\033[1;96m": "font-weight:bold;color:#39c5cf",
+                "\033[1;97m": "font-weight:bold;color:#ffffff",
+            };
+
+            // 先做一个简单的替换：把ANSI序列替换为span
+            let processed = text;
+            // 按顺序处理可能的ANSI序列
+            const sequences = Object.keys(colorMap).sort((a, b) => b.length - a.length);
+            for (const seq of sequences) {
+                if (processed.includes(seq)) {
+                    const color = colorMap[seq];
+                    const safeSeq = seq.replace(/[\[\]]/g, (m) => "\\" + m);
+                    processed = processed.split(seq).join(`{{CLOSE}}${seq}{{OPEN:${color}}}`);
+                }
+            }
+
+            // 处理 {{OPEN:style}} 和 {{CLOSE}} 标记
+            let htmlParts = processed.split("{{CLOSE}}");
+            let html = "";
+            let inSpan = false;
+
+            for (const part of htmlParts) {
+                const openMatch = part.match(/\{\{OPEN:(.+?)\}\}/));
+                if (openMatch) {
+                    const style = openMatch[1];
+                    html += `<span style="${style}">`;
+                    inSpan = true;
+                }
+                const content = part.replace(/\{\{OPEN:.+?\}\}/, "");
+                if (inSpan) {
+                    html += content + "</span>";
+                } else {
+                    html += content;
+                }
+            }
+
+            // 转义HTML特殊字符（但保留我们添加的span）
+            return html
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function appendOutput(text) {
+            // 如果没有ANSI转义序列，直接显示
+            if (!text.includes("\033[")) {
+                termEl.textContent += text;
+            } else {
+                // 保留现有文本并追加
+                const div = document.createElement("span");
+                div.innerHTML = parseANSI(text);
+                termEl.appendChild(div);
+            }
+            termEl.scrollTop = termEl.scrollHeight;
+        }
+
+        function clearTerm() {
+            termEl.innerHTML = "";
+        }
+
+        function restartApp() {
+            if (ws) {
+                ws.close();
+            }
+            clearTerm();
+            connect();
+        }
+
+        function sendKey(key) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(key);
+            }
+        }
+
+        // 键盘事件处理
+        document.addEventListener("keydown", function(e) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            if (e.key === "Enter") {
+                ws.send("\n");
+            } else if (e.key === "Backspace") {
+                ws.send("\x7f");
+            } else if (e.ctrlKey && e.key === "c") {
+                ws.send("\x03");
+            } else if (e.key === "ArrowUp") {
+                ws.send("\x1b[A");
+            } else if (e.key === "ArrowDown") {
+                ws.send("\x1b[B");
+            } else if (e.key === "ArrowLeft") {
+                ws.send("\x1b[D");
+            } else if (e.key === "ArrowRight") {
+                ws.send("\x1b[C");
+            } else if (e.ctrlKey && e.key === "d") {
+                ws.send("\x04");
+            }
+        });
+
+        // 输入法输入
+        document.addEventListener("input", function(e) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (e.target === document.body) {
+                ws.send(e.data);
+            }
+        });
+
+        function connect() {
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = protocol + "//" + window.location.host + "/ws/" + appId;
+
+            statusEl.textContent = "正在连接...";
+            statusEl.className = "status";
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                statusEl.textContent = "● 运行中";
+                statusEl.className = "status running";
+            };
+
+            ws.onmessage = function(event) {
+                appendOutput(event.data);
+            };
+
+            ws.onclose = function() {
+                statusEl.textContent = "已断开";
+                statusEl.className = "status";
+                appendOutput("\n\n[连接已断开，请点击「重启」重新运行]\n");
+            };
+
+            ws.onerror = function() {
+                statusEl.textContent = "连接错误";
+                statusEl.className = "status";
+            };
+        }
+
+        // 启动连接
+        connect();
+    </script>
+</body>
+</html>
