@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Tracker - 终端程序集合</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 24px 0;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #58a6ff;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .app-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .app-card:hover {
+            border-color: #58a6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.1);
+        }
+
+        .app-card .app-id {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 4px;
+        }
+
+        .app-card .app-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 8px;
+        }
+
+        .app-card .app-desc {
+            font-size: 13px;
+            color: #8b949e;
+            line-height: 1.5;
+        }
+
+        .app-card .run-hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #58a6ff;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .app-card:hover .run-hint {
+            opacity: 1;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 32px;
+            color: #8b949e;
+            font-size: 13px;
+        }
+
+        .tips {
+            background: #1c2128;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .tips strong {
+            color: #e6edf3;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Stock Tracker Terminal</h1>
+        <p>10个终端程序，在浏览器里跑 (・∀・)</p>
+    </div>
+
+    <div class="container">
+        <div class="tips">
+            <strong>使用说明：</strong> 点击任意程序卡片进入终端，有些程序需要输入数据后按回车继续。
+            终端支持ANSI颜色，如果显示异常请刷新重试。
+        </div>
+
+        <div class="apps-grid">
+            {% for app_id, app in apps.items() %}
+            <a href="/terminal/{{ app_id }}" class="app-card">
+                <div class="app-id">#{{ app_id.split('-')[0] }}</div>
+                <div class="app-name">{{ app.name }}</div>
+                <div class="app-desc">{{ app.desc }}</div>
+                <div class="run-hint">→ 点击运行</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="footer">
+        Stock Tracker Web Terminal | Synology NAS 1618+ | Python 3
+    </div>
+</body>
+</html>
