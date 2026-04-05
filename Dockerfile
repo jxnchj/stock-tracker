@@ -16,10 +16,12 @@ ENV TERM=xterm-256color
 
 WORKDIR /app
 
+# 先建目录避免空目录问题
+RUN mkdir -p static templates
+
 # 复制应用文件
 COPY web_terminal.py .
 COPY templates/ ./templates/
-COPY static/ ./static/
 COPY *.py .
 
 # 安装Python依赖
@@ -30,9 +32,5 @@ EXPOSE 5000
 
 ENV LISTEN_PORT=5000
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/ || exit 1
-
 # 启动命令
-CMD ["python3", "web_terminal.py", "--host=0.0.0.0", "--port=5000", "--port=5001"]
+CMD ["python3", "web_terminal.py", "--host=0.0.0.0", "--port=5000"]
