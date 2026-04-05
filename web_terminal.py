@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# -*- coding: utf-utf-8 -*-
 """
 Web Terminal Service for Stock Tracker Apps
-Flask + websockets 后端，在浏览器里运行终端程序
+Flask-SocketIO 后端，支持 WebSocket/polling 自动切换
 """
 
-from flask import Flask, render_template, request, Response
-from flask_sock import Sock
-import subprocess
-import asyncio
-import uuid
 import os
 import sys
 import select
 import termios
 import tty
 import pty
-import struct
 import fcntl
 import errno
 import signal
 
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
+
+# Flask-SocketIO 会自动处理 WS/polling 切换
 app = Flask(__name__, static_folder='static', template_folder='templates')
-sock = Sock(app)
+app.config['SECRET_KEY'] = 'stock-tracker-secret-' + os.environ.get('PORT', '5000')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # 程序目录
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -83,23 +82,22 @@ APPS = {
 
 
 def run_app(app_id, write_fn):
-    """通过pty运行程序，实时回传输出到websocket"""
+    """通过pty运行程序，实时回传输出"""
     if app_id not in APPS:
-        write_fn(f"未知程序: {app_id}\n".encode())
+        write_fn(f"未知程序: {app_id}\n")
         return
 
     app_info = APPS[app_id]
     app_path = os.path.join(APP_DIR, app_info["file"])
 
     if not os.path.exists(app_path):
-        write_fn(f"文件不存在: {app_path}\n".encode())
+        write_fn(f"文件不存在: {app_path}\n")
         return
 
     # 创建伪终端
     master_fd, slave_fd = pty.openpty()
     old_settings = termios.tcgetattr(slave_fd)
 
-    # 设置终端
     try:
         tty.setraw(slave_fd)
         termios.tcsetattr(slave_fd, termios.TCSADRAIN, old_settings)
@@ -133,41 +131,37 @@ def run_app(app_id, write_fn):
 
         try:
             while True:
-                # 等待数据
                 r, _, _ = select.select([master_fd], [], [], 0.5)
-
                 if master_fd in r:
                     try:
                         data = os.read(master_fd, 4096)
                         if data:
-                            write_fn(data)
+                            write_fn(data.decode("utf-8", errors="replace"))
                         else:
                             break
                     except OSError as e:
                         if e.errno != errno.EIO:
                             break
-                        # EIO means EOF on some systems
                         break
 
-                # 检查子进程是否结束
+                # 检查子进程
                 result, _ = os.waitpid(pid, os.WNOHANG)
                 if result != 0:
                     break
-
         finally:
             os.close(master_fd)
-            # 确保子进程被终止
             try:
                 os.kill(pid, signal.SIGTERM)
             except:
                 pass
 
 
+# ====== Flask 路由 ======
+
 @app.route("/")
 def index():
     """首页：程序列表"""
     return render_template("index.html", apps=APPS)
-
 
 @app.route("/terminal/<app_id>")
 def terminal_page(app_id):
@@ -176,36 +170,47 @@ def terminal_page(app_id):
         return "未知程序", 404
     return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
 
+# ====== Socket.IO 事件 ======
 
-@sock.route("/ws/<app_id>")
-def websocket_terminal(ws, app_id):
-    """WebSocket终端"""
+@socketio.on("connect")
+def on_connect():
+    """客户端连接"""
+    print(f"Client connected: {request.sid}")
 
-    def write(data):
-        try:
-            ws.send(data.decode("utf-8", errors="replace"))
-        except:
-            pass
 
-    run_app(app_id, write)
+@socketio.on("disconnect")
+def on_disconnect():
+    """客户端断开"""
+    print(f"Client disconnected: {request.sid}")
+
+
+@socketio.on("start_terminal")
+def on_start_terminal(data):
+    """客户端请求启动终端"""
+    app_id = data.get("app_id", "")
+    if app_id not in APPS:
+        emit("terminal_output", {"data": f"未知程序: {app_id}\n"})
+        return
+
+    def write_fn(text):
+        emit("terminal_output", {"data": text}, broadcast=True)
+
+    # 在独立线程中运行程序
+    socketio.start_background_task(run_app, app_id, write_fn)
+
+
+@socketio.on("terminal_input")
+def on_terminal_input(data):
+    """客户端发送按键输入（当前版本不需要，程序不接受输入）"""
+    pass  # run_app 通过 pty 读取，不需要单独的 input 事件
 
 
 if __name__ == "__main__":
-    # 允许跨域，方便开发
-    from flask_cors import CORS
-    CORS(app)
-
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="0.0.0.0", help="监听地址")
-    parser.add_argument("--port", type=int, default=5000, help="监听端口")
-    parser.add_argument("--debug", action="store_true", help="调试模式")
-    args = parser.parse_args()
-
+    port = int(os.environ.get("PORT", 5000))
     print(f"")
     print(f"  ╔══════════════════════════════════════════╗")
     print(f"  ║   Stock Tracker Web Terminal Service      ║")
-    print(f"  ║   浏览器访问: http://{args.host}:{args.port}   ║")
+    print(f"  ║   监听端口: {port}                        ║")
     print(f"  ╚══════════════════════════════════════════╝")
     print(f"")
     print(f"  支持的程序：")
@@ -213,10 +218,9 @@ if __name__ == "__main__":
         print(f"  {k}: {v['name']}")
     print(f"")
 
-    app.run(
-        host=args.host,
-        port=args.port,
-        debug=args.debug,
-        threaded=True,
-        extra_files=[],  # 不监听额外文件变化
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        debug=False,
     )
