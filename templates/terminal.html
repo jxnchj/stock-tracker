@@ -75,6 +75,22 @@
         .action-btn:hover { background: #30363d; }
         .action-btn.danger { border-color: #f85149; color: #f85149; }
         .action-btn.danger:hover { background: #f8514922; }
+
+        /* 输入框 */
+        #input-line {
+            display: flex; align-items: center;
+            padding: 6px 12px; background: #161b22;
+            border-top: 1px solid #30363d; gap: 8px;
+        }
+        #input-line .prompt {
+            color: #58a6ff; font-size: 14px; white-space: nowrap;
+        }
+        #cmd-input {
+            flex: 1; background: #0d1117; border: 1px solid #30363d;
+            color: #e6edf3; padding: 6px 10px; border-radius: 4px;
+            font-family: inherit; font-size: 14px; outline: none;
+        }
+        #cmd-input:focus { border-color: #58a6ff; }
     </style>
 </head>
 <body>
@@ -94,6 +110,11 @@
     <div class="actions">
         <button class="action-btn" onclick="clearTerm()">清屏</button>
         <button class="action-btn danger" onclick="restartApp()">重启</button>
+    </div>
+
+    <div id="input-line">
+        <span class="prompt">$</span>
+        <input type="text" id="cmd-input" placeholder="输入内容后按回车发送..." autocomplete="off" autofocus />
     </div>
 
     <script>
@@ -519,6 +540,34 @@
             clearTerm();
             connect();
         }
+
+        // 输入框 - 回车发送
+        var cmdInput = document.getElementById("cmd-input");
+        cmdInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                var val = cmdInput.value;
+                if (val.length > 0) {
+                    // 发送到后端
+                    fetch("/input/" + appId, {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({key: val})
+                    }).catch(function(err) {
+                        console.log("input error:", err);
+                    });
+                    // 显示用户输入
+                    appendChars("\r");
+                    appendChars(val + "\r");
+                    cmdInput.value = "";
+                }
+            } else if (e.key === "Backspace") {
+                fetch("/input/" + appId, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({key: "Backspace"})
+                }).catch(function() {});
+            }
+        });
 
         function connect() {
             statusEl.textContent = "正在连接...";
