@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 LABEL maintainer="StockTracker"
 
-# 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     locales curl \
     && localedef -i zh_CN -f UTF-8 zh_CN.UTF-8 \
@@ -17,16 +16,13 @@ WORKDIR /app
 
 RUN mkdir -p static templates
 
-# 复制文件
 COPY web_terminal.py .
 COPY templates/ ./templates/
 COPY *.py .
 
-# 安装依赖
 RUN pip install --no-cache-dir flask flask-cors gunicorn
 
-# Railway 注入 PORT
-EXPOSE $PORT
+EXPOSE 8000
 
-# 使用 gunicorn 运行（稳定）
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "--threads", "4", "--timeout", "120", "web_terminal:app"]
+# Railway 注入 PORT 环境变量，用 shell 展开
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 web_terminal:app"]
