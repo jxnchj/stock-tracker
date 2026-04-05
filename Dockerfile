@@ -25,4 +25,5 @@ RUN pip install --no-cache-dir flask flask-cors gunicorn
 EXPOSE 8000
 
 # Railway 注入 PORT 环境变量，用 shell 展开
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 web_terminal:app"]
+# 单 worker 多线程模式，避免多进程共享状态问题
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 8 --timeout 120 web_terminal:app"]
