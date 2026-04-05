@@ -174,7 +174,14 @@ def terminal_page(app_id):
     """终端页面"""
     if app_id not in APPS:
         return "未知程序", 404
-    return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
+    try:
+        return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
+    except Exception as e:
+        import traceback
+        import sys
+        sys.stderr.write(f"render_template error: {e}\n")
+        sys.stderr.write(traceback.format_exc())
+        return f"Template error: {e}", 500
 
 
 @sock.route("/ws/<app_id>")
