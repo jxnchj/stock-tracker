@@ -24,11 +24,11 @@ COPY web_terminal.py .
 COPY templates/ ./templates/
 COPY *.py .
 
-# 安装Python依赖 - 用 flask-socketio 替代 flask-sock
-RUN pip install --no-cache-dir flask flask-socketio flask-cors gevent
+# 安装Python依赖
+RUN pip install --no-cache-dir flask flask-sock flask-cors gevent
 
 # Railway 注入 PORT 环境变量
 EXPOSE $PORT
 
 # 启动命令
-CMD python3 web_terminal.py
+CMD python3 web_terminal.py --host=0.0.0.0 --port=$PORT
