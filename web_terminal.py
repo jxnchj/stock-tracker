@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Web Terminal Service for Stock Tracker Apps
-Flask + threading 后端，SSE 输出
+Flask + threading 后端，SSE 输出 + 键盘输入
 """
 
 import os
@@ -17,7 +17,7 @@ import signal
 import threading
 import queue as ThreadQueue
 
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, request
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -78,6 +78,10 @@ APPS = {
     },
 }
 
+# 存储运行中的进程信息: app_id -> {pid, master_fd, thread}
+running_procs = {}
+proc_lock = threading.Lock()
+
 
 def run_app_streaming(app_id, out_queue):
     """通过 pty 运行程序，输出放入队列"""
@@ -124,6 +128,10 @@ def run_app_streaming(app_id, out_queue):
     flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
     fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
+    # 注册进程
+    with proc_lock:
+        running_procs[app_id] = {"pid": pid, "master_fd": master_fd}
+
     try:
         while True:
             r, _, _ = select.select([master_fd], [], [], 0.5)
@@ -142,6 +150,9 @@ def run_app_streaming(app_id, out_queue):
             if result != 0:
                 break
     finally:
+        with proc_lock:
+            if app_id in running_procs:
+                del running_procs[app_id]
         os.close(master_fd)
         try:
             os.kill(pid, signal.SIGTERM)
@@ -199,6 +210,50 @@ def stream(app_id):
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@app.route("/input/<app_id>", methods=["POST"])
+def input_to_app(app_id):
+    """接收键盘输入，发送给运行中的程序"""
+    if app_id not in APPS:
+        return "未知程序", 404
+
+    data = request.get_json()
+    key = data.get("key", "")
+
+    with proc_lock:
+        proc_info = running_procs.get(app_id)
+
+    if proc_info is None:
+        return "程序未运行", 400
+
+    master_fd = proc_info["master_fd"]
+
+    try:
+        # 发送按键到 pty
+        if key == "Enter":
+            os.write(master_fd, b"\r")
+        elif key == "Backspace":
+            os.write(master_fd, b"\177")
+        elif key == "ArrowUp":
+            os.write(master_fd, b"\x1b[A")
+        elif key == "ArrowDown":
+            os.write(master_fd, b"\x1b[B")
+        elif key == "ArrowLeft":
+            os.write(master_fd, b"\x1b[D")
+        elif key == "ArrowRight":
+            os.write(master_fd, b"\x1b[C")
+        elif key == "Escape":
+            os.write(master_fd, b"\x1b")
+        elif key == "Tab":
+            os.write(master_fd, b"\t")
+        else:
+            # 普通字符
+            os.write(master_fd, key.encode("utf-8"))
+    except OSError:
+        return "写入失败", 500
+
+    return "ok"
 
 
 if __name__ == "__main__":
