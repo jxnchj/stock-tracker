@@ -31,5 +31,5 @@ RUN pip install --no-cache-dir flask flask-sock flask-cors gevent
 # Railway 注入 PORT 环境变量
 EXPOSE $PORT
 
-# 启动命令 - 使用 Railway 注入的 PORT
-CMD ["python3", "web_terminal.py", "--host=0.0.0.0", "--port=$PORT"]
+# 启动命令 - 使用 Railway 注入的 PORT (shell form 才能展开变量)
+CMD python3 web_terminal.py --host=0.0.0.0 --port=$PORT
