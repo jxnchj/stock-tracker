@@ -180,6 +180,7 @@ def terminal_page(app_id):
 @sock.route("/ws/<app_id>")
 def websocket_terminal(ws, app_id):
     """WebSocket终端"""
+    import traceback
 
     def write(data):
         try:
@@ -187,7 +188,18 @@ def websocket_terminal(ws, app_id):
         except:
             pass
 
-    run_app(app_id, write)
+    try:
+        run_app(app_id, write)
+    except Exception as e:
+        err_msg = f"\n\x1b[31m[ERROR] {type(e).__name__}: {e}\x1b[0m\n"
+        try:
+            ws.send(err_msg)
+        except:
+            pass
+        # 打印到 stderr 让 Railway 日志能看到
+        import sys
+        sys.stderr.write(f"run_app error: {type(e).__name__}: {e}\n")
+        sys.stderr.write(traceback.format_exc())
 
 
 if __name__ == "__main__":
