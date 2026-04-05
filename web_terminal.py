@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Web Terminal Service for Stock Tracker Apps
-Flask + SSE（Server-Sent Events）后端
-SSE = HTTP 长连接，Railway 代理完美支持
+Flask + threading 后端，SSE 输出
 """
 
 import os
@@ -16,8 +15,9 @@ import fcntl
 import errno
 import signal
 import threading
+import queue as ThreadQueue
 
-from flask import Flask, render_template, request, Response
+from flask import Flask, render_template, Response
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -79,33 +79,30 @@ APPS = {
 }
 
 
-def run_app_streaming(app_id, queue):
-    """通过 pty 运行程序，把输出放入队列"""
+def run_app_streaming(app_id, out_queue):
+    """通过 pty 运行程序，输出放入队列"""
     if app_id not in APPS:
-        queue.put(("stderr", f"未知程序: {app_id}\n"))
-        queue.put(("done", ""))
+        out_queue.put(("stderr", "未知程序: " + app_id + "\n"))
+        out_queue.put(("done", ""))
         return
 
     app_info = APPS[app_id]
     app_path = os.path.join(APP_DIR, app_info["file"])
 
     if not os.path.exists(app_path):
-        queue.put(("stderr", f"文件不存在: {app_path}\n"))
-        queue.put(("done", ""))
+        out_queue.put(("stderr", "文件不存在: " + app_path + "\n"))
+        out_queue.put(("done", ""))
         return
 
-    # 创建伪终端
     master_fd, slave_fd = pty.openpty()
     old_settings = termios.tcgetattr(slave_fd)
-
     try:
         tty.setraw(slave_fd)
         termios.tcsetattr(slave_fd, termios.TCSADRAIN, old_settings)
-    except:
+    except Exception:
         pass
 
     pid = os.fork()
-
     if pid == 0:
         # 子进程
         os.close(master_fd)
@@ -118,39 +115,40 @@ def run_app_streaming(app_id, queue):
         os.environ["LINES"] = "30"
         try:
             os.execvp("python3", ["python3", app_path])
-        except:
+        except Exception:
             os.execvp("python", ["python", app_path])
         os._exit(1)
-    else:
-        os.close(slave_fd)
-        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-        try:
-            while True:
-                r, _, _ = select.select([master_fd], [], [], 0.5)
-                if master_fd in r:
-                    try:
-                        data = os.read(master_fd, 4096)
-                        if data:
-                            queue.put(("stdout", data.decode("utf-8", errors="replace")))
-                        else:
-                            break
-                    except OSError as e:
-                        if e.errno != errno.EIO:
-                            break
+    # 父进程
+    os.close(slave_fd)
+    flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+    fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    try:
+        while True:
+            r, _, _ = select.select([master_fd], [], [], 0.5)
+            if master_fd in r:
+                try:
+                    data = os.read(master_fd, 4096)
+                    if data:
+                        out_queue.put(("stdout", data.decode("utf-8", errors="replace")))
+                    else:
                         break
-                result, _ = os.waitpid(pid, os.WNOHANG)
-                if result != 0:
+                except OSError as e:
+                    if e.errno != errno.EIO:
+                        break
                     break
-        finally:
-            os.close(master_fd)
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except:
-                pass
+            result, _ = os.waitpid(pid, os.WNOHANG)
+            if result != 0:
+                break
+    finally:
+        os.close(master_fd)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
 
-        queue.put(("done", ""))
+    out_queue.put(("done", ""))
 
 
 @app.route("/")
@@ -172,53 +170,43 @@ def terminal_page(app_id):
 
 @app.route("/stream/<app_id>")
 def stream(app_id):
-    """SSE 端点：程序输出的 HTTP 长连接流"""
+    """SSE 端点"""
     if app_id not in APPS:
         return "未知程序", 404
 
     def generate():
-        import queue
-        q = queue.Queue()
-
-        # 在后台线程运行程序
-        t = threading.Thread(target=run_app_streaming, args=(app_id, q))
+        out_queue = ThreadQueue.Queue()
+        t = threading.Thread(target=run_app_streaming, args=(app_id, out_queue))
         t.daemon = True
         t.start()
 
-        # 从队列里读取数据，发送到浏览器
         while True:
             try:
-                msg_type, data = q.get(timeout=30)
+                msg_type, data = out_queue.get(timeout=30)
                 if msg_type == "done":
                     break
-                # SSE 格式：data: 开头
-                yield f"data: {data.replace('\n', '&#10;')}\n\n"
-            except:
-                # 超时，发送心跳
-                yield f"data: \n\n"
+                # SSE 格式
+                yield "data: " + data + "\n\n"
+            except ThreadQueue.Empty:
+                # 超时发送空行保持连接
+                yield "data: \n\n"
 
     return Response(
         generate(),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # 禁用 nginx 缓冲
+            "X-Accel-Buffering": "no",
         }
     )
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"")
-    print(f"  ╔══════════════════════════════════════════╗")
-    print(f"  ║   Stock Tracker Web Terminal Service      ║")
-    print(f"  ║   监听端口: {port}                        ║")
-    print(f"  ╚══════════════════════════════════════════╝")
-    print(f"")
-    print(f"  支持的程序：")
-    for k, v in APPS.items():
-        print(f"  {k}: {v['name']}")
-    print(f"")
+    print("=" * 50)
+    print("Stock Tracker Web Terminal Service")
+    print("Port:", port)
+    print("=" * 50)
 
+    # Railway 用 gunicorn 或直接运行
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
