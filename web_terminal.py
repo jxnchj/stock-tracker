@@ -2,27 +2,24 @@
 # -*- coding: utf-8 -*-
 """
 Web Terminal Service for Stock Tracker Apps
-Flask + websockets 后端，在浏览器里运行终端程序
+Flask + SSE（Server-Sent Events）后端
+SSE = HTTP 长连接，Railway 代理完美支持
 """
 
-from flask import Flask, render_template, request, Response
-from flask_sock import Sock
-import subprocess
-import asyncio
-import uuid
 import os
 import sys
 import select
 import termios
 import tty
 import pty
-import struct
 import fcntl
 import errno
 import signal
+import threading
+
+from flask import Flask, render_template, request, Response
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-sock = Sock(app)
 
 # 程序目录
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,17 +79,19 @@ APPS = {
 }
 
 
-def run_app(app_id, write_fn):
-    """通过pty运行程序，实时回传输出到websocket"""
+def run_app_streaming(app_id, queue):
+    """通过 pty 运行程序，把输出放入队列"""
     if app_id not in APPS:
-        write_fn(f"未知程序: {app_id}\n".encode())
+        queue.put(("stderr", f"未知程序: {app_id}\n"))
+        queue.put(("done", ""))
         return
 
     app_info = APPS[app_id]
     app_path = os.path.join(APP_DIR, app_info["file"])
 
     if not os.path.exists(app_path):
-        write_fn(f"文件不存在: {app_path}\n".encode())
+        queue.put(("stderr", f"文件不存在: {app_path}\n"))
+        queue.put(("done", ""))
         return
 
     # 创建伪终端
@@ -123,10 +122,7 @@ def run_app(app_id, write_fn):
             os.execvp("python", ["python", app_path])
         os._exit(1)
     else:
-        # 父进程
         os.close(slave_fd)
-
-        # 设置stdout为非阻塞
         flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
         fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
@@ -137,7 +133,7 @@ def run_app(app_id, write_fn):
                     try:
                         data = os.read(master_fd, 4096)
                         if data:
-                            write_fn(data)
+                            queue.put(("stdout", data.decode("utf-8", errors="replace")))
                         else:
                             break
                     except OSError as e:
@@ -154,48 +150,70 @@ def run_app(app_id, write_fn):
             except:
                 pass
 
+        queue.put(("done", ""))
+
 
 @app.route("/")
 def index():
-    """首页：程序列表"""
     return render_template("index.html", apps=APPS)
 
 
 @app.route("/terminal/<app_id>")
 def terminal_page(app_id):
-    """终端页面"""
     if app_id not in APPS:
         return "未知程序", 404
-    return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
+    return render_template(
+        "terminal.html",
+        app_id=app_id,
+        app_name=APPS[app_id]["name"],
+        app_desc=APPS[app_id]["desc"]
+    )
 
 
-@sock.route("/ws/<app_id>")
-def websocket_terminal(ws, app_id):
-    """WebSocket终端"""
+@app.route("/stream/<app_id>")
+def stream(app_id):
+    """SSE 端点：程序输出的 HTTP 长连接流"""
+    if app_id not in APPS:
+        return "未知程序", 404
 
-    def write(data):
-        try:
-            ws.send(data.decode("utf-8", errors="replace"))
-        except:
-            pass
+    def generate():
+        import queue
+        q = queue.Queue()
 
-    run_app(app_id, write)
+        # 在后台线程运行程序
+        t = threading.Thread(target=run_app_streaming, args=(app_id, q))
+        t.daemon = True
+        t.start()
+
+        # 从队列里读取数据，发送到浏览器
+        while True:
+            try:
+                msg_type, data = q.get(timeout=30)
+                if msg_type == "done":
+                    break
+                # SSE 格式：data: 开头
+                yield f"data: {data.replace('\n', '&#10;')}\n\n"
+            except:
+                # 超时，发送心跳
+                yield f"data: \n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用 nginx 缓冲
+        }
+    )
 
 
 if __name__ == "__main__":
-    from flask_cors import CORS
-    CORS(app)
-
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="0.0.0.0", help="监听地址")
-    parser.add_argument("--port", type=int, default=5000, help="监听端口")
-    args = parser.parse_args()
-
+    port = int(os.environ.get("PORT", 5000))
     print(f"")
     print(f"  ╔══════════════════════════════════════════╗")
     print(f"  ║   Stock Tracker Web Terminal Service      ║")
-    print(f"  ║   浏览器访问: http://{args.host}:{args.port}   ║")
+    print(f"  ║   监听端口: {port}                        ║")
     print(f"  ╚══════════════════════════════════════════╝")
     print(f"")
     print(f"  支持的程序：")
@@ -203,9 +221,4 @@ if __name__ == "__main__":
         print(f"  {k}: {v['name']}")
     print(f"")
 
-    app.run(
-        host=args.host,
-        port=args.port,
-        debug=False,
-        threaded=True,
-    )
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
