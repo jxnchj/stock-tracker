@@ -16,21 +16,20 @@ ENV TERM=xterm-256color
 
 WORKDIR /app
 
-# 先建目录避免空目录问题
-RUN mkdir -p static templates
-
 # 复制应用文件
 COPY web_terminal.py .
 COPY templates/ ./templates/
+
+# 先建目录避免空目录问题
+RUN mkdir -p static templates
+
 COPY *.py .
 
 # 安装Python依赖
 RUN pip install --no-cache-dir flask flask-sock flask-cors gevent
 
-# 暴露端口
-EXPOSE 5000
+# Railway 注入 PORT 环境变量
+EXPOSE $PORT
 
-ENV LISTEN_PORT=5000
-
-# 启动命令
-CMD ["python3", "web_terminal.py", "--host=0.0.0.0", "--port=5000"]
+# 启动命令 - 使用 Railway 注入的 PORT
+CMD ["python3", "web_terminal.py", "--host=0.0.0.0", "--port=$PORT"]
