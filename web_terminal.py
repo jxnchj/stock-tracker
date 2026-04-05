@@ -174,20 +174,12 @@ def terminal_page(app_id):
     """终端页面"""
     if app_id not in APPS:
         return "未知程序", 404
-    try:
-        return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
-    except Exception as e:
-        import traceback
-        import sys
-        sys.stderr.write(f"render_template error: {e}\n")
-        sys.stderr.write(traceback.format_exc())
-        return f"Template error: {e}", 500
+    return render_template("terminal.html", app_id=app_id, app_name=APPS[app_id]["name"], app_desc=APPS[app_id]["desc"])
 
 
 @sock.route("/ws/<app_id>")
 def websocket_terminal(ws, app_id):
     """WebSocket终端"""
-    import traceback
 
     def write(data):
         try:
@@ -195,18 +187,7 @@ def websocket_terminal(ws, app_id):
         except:
             pass
 
-    try:
-        run_app(app_id, write)
-    except Exception as e:
-        err_msg = f"\n\x1b[31m[ERROR] {type(e).__name__}: {e}\x1b[0m\n"
-        try:
-            ws.send(err_msg)
-        except:
-            pass
-        # 打印到 stderr 让 Railway 日志能看到
-        import sys
-        sys.stderr.write(f"run_app error: {type(e).__name__}: {e}\n")
-        sys.stderr.write(traceback.format_exc())
+    run_app(app_id, write)
 
 
 if __name__ == "__main__":
