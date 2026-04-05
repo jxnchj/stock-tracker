@@ -265,23 +265,23 @@
                 if (processed.includes(seq)) {
                     const color = colorMap[seq];
                     const safeSeq = seq.replace(/[\[\]]/g, (m) => "\\" + m);
-                    processed = processed.split(seq).join(`{{CLOSE}}${seq}{{OPEN:${color}}}`);
+                    processed = processed.split(seq).join(`[[CLOSE]]${seq}[[OPEN:${color}]]`);
                 }
             }
 
-            // 处理 {{OPEN:style}} 和 {{CLOSE}} 标记
-            let htmlParts = processed.split("{{CLOSE}}");
+            // 处理 [[OPEN:style]] 和 [[CLOSE]] 标记
+            let htmlParts = processed.split("[[CLOSE]]");
             let html = "";
             let inSpan = false;
 
             for (const part of htmlParts) {
-                const openMatch = part.match(/\{\{OPEN:(.+?)\}\}/));
+                const openMatch = part.match(/\[\[OPEN:(.+?)\]\]/));
                 if (openMatch) {
                     const style = openMatch[1];
                     html += `<span style="${style}">`;
                     inSpan = true;
                 }
-                const content = part.replace(/\{\{OPEN:.+?\}\}/, "");
+                const content = part.replace(/\[\[OPEN:.+?\]\]/, "");
                 if (inSpan) {
                     html += content + "</span>";
                 } else {
