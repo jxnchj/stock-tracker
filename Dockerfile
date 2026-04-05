@@ -16,20 +16,19 @@ ENV TERM=xterm-256color
 
 WORKDIR /app
 
-# 复制应用文件
-COPY web_terminal.py .
-COPY templates/ ./templates/
-
 # 先建目录避免空目录问题
 RUN mkdir -p static templates
 
+# 复制应用文件
+COPY web_terminal.py .
+COPY templates/ ./templates/
 COPY *.py .
 
-# 安装Python依赖
-RUN pip install --no-cache-dir flask flask-sock flask-cors gevent
+# 安装Python依赖 - 用 flask-socketio 替代 flask-sock
+RUN pip install --no-cache-dir flask flask-socketio flask-cors gevent-websocket
 
 # Railway 注入 PORT 环境变量
 EXPOSE $PORT
 
-# 启动命令 - 使用 Railway 注入的 PORT (shell form 才能展开变量)
-CMD python3 web_terminal.py --host=0.0.0.0 --port=$PORT
+# 启动命令 - 使用 gevent 做 ASGI 服务器
+CMD python3 -c "from gevent.pywsgi import WSGIServer; from web_terminal import app; http = WSGIServer(('0.0.0.0', int(os.environ.get('PORT',5000))), app); http.serve_forever()"
