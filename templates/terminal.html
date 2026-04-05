@@ -192,12 +192,14 @@
         <button class="action-btn danger" onclick="restartApp()">重启</button>
     </div>
 
+    <!-- Socket.IO 客户端 -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
         const appId = "{{ app_id }}";
         const termEl = document.getElementById("terminal");
         const statusEl = document.getElementById("status");
-        let ws = null;
-        let inputBuffer = "";
+        let socket = null;
+        let connected = false;
 
         // ANSI到CSS的映射
         const ANSI_STYLES = {
@@ -315,78 +317,80 @@
         }
 
         function restartApp() {
-            if (ws) {
-                ws.close();
+            if (socket) {
+                socket.disconnect();
             }
             clearTerm();
             connect();
         }
 
         function sendKey(key) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(key);
+            if (socket && connected) {
+                socket.emit("terminal_input", { data: key });
             }
         }
 
         // 键盘事件处理
         document.addEventListener("keydown", function(e) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (!connected) return;
 
             if (e.key === "Enter") {
-                ws.send("\n");
+                socket.emit("terminal_input", { data: "\n" });
             } else if (e.key === "Backspace") {
-                ws.send("\x7f");
+                socket.emit("terminal_input", { data: "\x7f" });
             } else if (e.ctrlKey && e.key === "c") {
-                ws.send("\x03");
+                socket.emit("terminal_input", { data: "\x03" });
             } else if (e.key === "ArrowUp") {
-                ws.send("\x1b[A");
+                socket.emit("terminal_input", { data: "\x1b[A" });
             } else if (e.key === "ArrowDown") {
-                ws.send("\x1b[B");
+                socket.emit("terminal_input", { data: "\x1b[B" });
             } else if (e.key === "ArrowLeft") {
-                ws.send("\x1b[D");
+                socket.emit("terminal_input", { data: "\x1b[D" });
             } else if (e.key === "ArrowRight") {
-                ws.send("\x1b[C");
+                socket.emit("terminal_input", { data: "\x1b[C" });
             } else if (e.ctrlKey && e.key === "d") {
-                ws.send("\x04");
+                socket.emit("terminal_input", { data: "\x04" });
             }
         });
 
         // 输入法输入
         document.addEventListener("input", function(e) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            if (e.target === document.body) {
-                ws.send(e.data);
+            if (!connected) return;
+            if (e.target === document.body && e.data) {
+                socket.emit("terminal_input", { data: e.data });
             }
         });
 
         function connect() {
-            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            const wsUrl = protocol + "//" + window.location.host + "/ws/" + appId;
-
             statusEl.textContent = "正在连接...";
             statusEl.className = "status";
 
-            ws = new WebSocket(wsUrl);
+            // Socket.IO 自动处理 WS/polling fallback
+            socket = io();
 
-            ws.onopen = function() {
+            socket.on("connect", function() {
+                connected = true;
                 statusEl.textContent = "● 运行中";
                 statusEl.className = "status running";
-            };
+                // 通知后端启动终端
+                socket.emit("start_terminal", { app_id: appId });
+            });
 
-            ws.onmessage = function(event) {
-                appendOutput(event.data);
-            };
+            socket.on("terminal_output", function(data) {
+                appendOutput(data.data);
+            });
 
-            ws.onclose = function() {
+            socket.on("disconnect", function() {
+                connected = false;
                 statusEl.textContent = "已断开";
                 statusEl.className = "status";
                 appendOutput("\n\n[连接已断开，请点击「重启」重新运行]\n");
-            };
+            });
 
-            ws.onerror = function() {
+            socket.on("connect_error", function() {
                 statusEl.textContent = "连接错误";
                 statusEl.className = "status";
-            };
+            });
         }
 
         // 启动连接
