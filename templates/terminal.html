@@ -73,11 +73,6 @@
             color: #3fb950;
         }
 
-        .status.connected {
-            background: #0d4429;
-            color: #3fb950;
-        }
-
         .terminal-wrapper {
             flex: 1;
             overflow: hidden;
@@ -108,33 +103,6 @@
         #terminal::-webkit-scrollbar-thumb {
             background: #30363d;
             border-radius: 4px;
-        }
-
-        /* ANSI颜色 */
-        .term-red { color: #ff7b72; }
-        .term-green { color: #3fb950; }
-        .term-yellow { color: #d29922; }
-        .term-blue { color: #58a6ff; }
-        .term-magenta { color: #bc8cff; }
-        .term-cyan { color: #39c5cf; }
-        .term-white { color: #e6edf3; }
-        .term-bright { color: #ffffff; font-weight: bold; }
-        .term-dim { color: #8b949e; }
-        .term-reset { color: #e6edf3; }
-        .term-bold { font-weight: bold; }
-
-        /* 光标闪烁 */
-        .cursor {
-            display: inline-block;
-            width: 8px;
-            height: 14px;
-            background: #58a6ff;
-            animation: blink 1s step-end infinite;
-            vertical-align: bottom;
-        }
-
-        @keyframes blink {
-            50% { opacity: 0; }
         }
 
         .actions {
@@ -187,127 +155,58 @@
     </div>
 
     <div class="actions">
-        <button class="action-btn" onclick="sendKey('\x03')">Ctrl+C 中断</button>
         <button class="action-btn" onclick="clearTerm()">清屏</button>
         <button class="action-btn danger" onclick="restartApp()">重启</button>
     </div>
 
-    <!-- Socket.IO 客户端 -->
-        <script>
+    <script>
         const appId = "{{ app_id }}";
         const termEl = document.getElementById("terminal");
         const statusEl = document.getElementById("status");
-        let ws = null;
-        
+        let eventSource = null;
 
-        // ANSI到CSS的映射
-        const ANSI_STYLES = {
-            0: "",  // reset
-            1: "font-weight:bold", // bold
-            2: "opacity:0.7", // dim
-            30: "color:#8b949e", // black
-            31: "color:#ff7b72", // red
-            32: "color:#3fb950", // green
-            33: "color:#d29922", // yellow
-            34: "color:#58a6ff", // blue
-            35: "color:#bc8cff", // magenta
-            36: "color:#39c5cf", // cyan
-            37: "color:#e6edf3", // white
-            39: "color:#e6edf3", // reset foreground
-            90: "color:#8b949e", // bright black
-            91: "color:#ff7b72", // bright red
-            92: "color:#3fb950", // bright green
-            93: "color:#d29922", // bright yellow
-            94: "color:#58a6ff", // bright blue
-            95: "color:#bc8cff", // bright magenta
-            96: "color:#39c5cf", // bright cyan
-            97: "color:#ffffff", // bright white
+        // ANSI 颜色映射
+        const colorMap = {
+            "\033[91m": "color:#ff7b72",
+            "\033[92m": "color:#3fb950",
+            "\033[93m": "color:#d29922",
+            "\033[94m": "color:#58a6ff",
+            "\033[95m": "color:#bc8cff",
+            "\033[96m": "color:#39c5cf",
+            "\033[97m": "color:#ffffff",
+            "\033[1m": "font-weight:bold",
+            "\033[0m": "",
+            "\033[0;91m": "color:#ff7b72",
+            "\033[0;92m": "color:#3fb950",
+            "\033[0;93m": "color:#d29922",
+            "\033[0;94m": "color:#58a6ff",
+            "\033[0;95m": "color:#bc8cff",
+            "\033[0;96m": "color:#39c5cf",
+            "\033[0;97m": "color:#ffffff",
+            "\033[1;91m": "font-weight:bold;color:#ff7b72",
+            "\033[1;92m": "font-weight:bold;color:#3fb950",
+            "\033[1;93m": "font-weight:bold;color:#d29922",
+            "\033[1;94m": "font-weight:bold;color:#58a6ff",
+            "\033[1;95m": "font-weight:bold;color:#bc8cff",
+            "\033[1;96m": "font-weight:bold;color:#39c5cf",
+            "\033[1;97m": "font-weight:bold;color:#ffffff",
+            "\033[2m": "opacity:0.7",
+            "\033[90m": "color:#8b949e",
+            "\033[0;90m": "color:#8b949e",
         };
 
         function parseANSI(text) {
-            // 处理ANSI转义序列，转换为HTML
-            let result = "";
-            let i = 0;
-            let openSpans = [];
-            let currentStyle = "";
-
-            // 颜色别名
-            const colorMap = {
-                "\033[91m": "color:#ff7b72",
-                "\033[92m": "color:#3fb950",
-                "\033[93m": "color:#d29922",
-                "\033[94m": "color:#58a6ff",
-                "\033[95m": "color:#bc8cff",
-                "\033[96m": "color:#39c5cf",
-                "\033[97m": "color:#ffffff",
-                "\033[1m": "font-weight:bold",
-                "\033[0m": "",
-                "\033[0;91m": "color:#ff7b72",
-                "\033[0;92m": "color:#3fb950",
-                "\033[0;93m": "color:#d29922",
-                "\033[0;94m": "color:#58a6ff",
-                "\033[0;95m": "color:#bc8cff",
-                "\033[0;96m": "color:#39c5cf",
-                "\033[0;97m": "color:#ffffff",
-                "\033[1;91m": "font-weight:bold;color:#ff7b72",
-                "\033[1;92m": "font-weight:bold;color:#3fb950",
-                "\033[1;93m": "font-weight:bold;color:#d29922",
-                "\033[1;94m": "font-weight:bold;color:#58a6ff",
-                "\033[1;95m": "font-weight:bold;color:#bc8cff",
-                "\033[1;96m": "font-weight:bold;color:#39c5cf",
-                "\033[1;97m": "font-weight:bold;color:#ffffff",
-            };
-
-            // 先做一个简单的替换：把ANSI序列替换为span
-            let processed = text;
-            // 按顺序处理可能的ANSI序列
-            const sequences = Object.keys(colorMap).sort((a, b) => b.length - a.length);
-            for (const seq of sequences) {
-                if (processed.includes(seq)) {
-                    const color = colorMap[seq];
-                    const safeSeq = seq.replace(/[\[\]]/g, (m) => "\\" + m);
-                    processed = processed.split(seq).join(`[[CLOSE]]${seq}[[OPEN:${color}]]`);
-                }
-            }
-
-            // 处理 [[OPEN:style]] 和 [[CLOSE]] 标记
-            let htmlParts = processed.split("[[CLOSE]]");
-            let html = "";
-            let inSpan = false;
-
-            for (const part of htmlParts) {
-                const openMatch = part.match(/\[\[OPEN:(.+?)\]\]/));
-                if (openMatch) {
-                    const style = openMatch[1];
-                    html += `<span style="${style}">`;
-                    inSpan = true;
-                }
-                const content = part.replace(/\[\[OPEN:.+?\]\]/, "");
-                if (inSpan) {
-                    html += content + "</span>";
-                } else {
-                    html += content;
-                }
-            }
-
-            // 转义HTML特殊字符（但保留我们添加的span）
-            return html
+            // 跳过 SSI 标记直接返回原始文本（程序已经是纯文本输出）
+            return text
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;");
+                .replace(/>/g, "&gt;");
         }
 
         function appendOutput(text) {
-            // 如果没有ANSI转义序列，直接显示
-            if (!text.includes("\033[")) {
-                termEl.textContent += text;
-            } else {
-                // 保留现有文本并追加
-                const div = document.createElement("span");
-                div.innerHTML = parseANSI(text);
-                termEl.appendChild(div);
-            }
+            const div = document.createElement("span");
+            div.innerHTML = parseANSI(text);
+            termEl.appendChild(div);
             termEl.scrollTop = termEl.scrollHeight;
         }
 
@@ -316,77 +215,37 @@
         }
 
         function restartApp() {
-            if (ws) {
-                ws.close();
+            if (eventSource) {
+                eventSource.close();
             }
             clearTerm();
             connect();
         }
 
-        function sendKey(key) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(key);
-            }
-        }
-
-        // 键盘事件处理
-        document.addEventListener("keydown", function(e) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-            if (e.key === "Enter") {
-                ws.send("\n");
-            } else if (e.key === "Backspace") {
-                ws.send("\x7f");
-            } else if (e.ctrlKey && e.key === "c") {
-                ws.send("\x03");
-            } else if (e.key === "ArrowUp") {
-                ws.send("\x1b[A");
-            } else if (e.key === "ArrowDown") {
-                ws.send("\x1b[B");
-            } else if (e.key === "ArrowLeft") {
-                ws.send("\x1b[D");
-            } else if (e.key === "ArrowRight") {
-                ws.send("\x1b[C");
-            } else if (e.ctrlKey && e.key === "d") {
-                ws.send("\x04");
-            }
-        });
-
-        // 输入法输入
-        document.addEventListener("input", function(e) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            if (e.target === document.body && e.data) {
-                ws.send(e.data);
-            }
-        });
-
         function connect() {
-            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            const wsUrl = protocol + "//" + window.location.host + "/ws/" + appId;
-
             statusEl.textContent = "正在连接...";
             statusEl.className = "status";
 
-            ws = new WebSocket(wsUrl);
+            // 使用 SSE（Server-Sent Events）- HTTP 长连接，Railway 完美支持
+            eventSource = new EventSource("/stream/" + appId);
 
-            ws.onopen = function() {
+            eventSource.onopen = function() {
                 statusEl.textContent = "● 运行中";
                 statusEl.className = "status running";
             };
 
-            ws.onmessage = function(event) {
-                appendOutput(event.data);
+            eventSource.onmessage = function(event) {
+                // SSE 的 data 字段已解码换行符
+                if (event.data) {
+                    appendOutput(event.data);
+                }
             };
 
-            ws.onclose = function() {
+            eventSource.onerror = function() {
                 statusEl.textContent = "已断开";
                 statusEl.className = "status";
+                eventSource.close();
                 appendOutput("\n\n[连接已断开，请点击「重启」重新运行]\n");
-            };
-
-            ws.onerror = function() {
-                statusEl.textContent = "连接错误";
-                statusEl.className = "status";
             };
         }
 
