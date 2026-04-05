@@ -1,7 +1,6 @@
 FROM python:3.11-slim
 
 LABEL maintainer="StockTracker"
-LABEL description="Stock Tracker Web Terminal"
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,19 +15,18 @@ ENV TERM=xterm-256color
 
 WORKDIR /app
 
-# 先建目录避免空目录问题
 RUN mkdir -p static templates
 
-# 复制应用文件
+# 复制文件
 COPY web_terminal.py .
 COPY templates/ ./templates/
 COPY *.py .
 
-# 安装Python依赖 - 用 flask-socketio 替代 flask-sock
-RUN pip install --no-cache-dir flask flask-socketio flask-cors gevent
+# 安装依赖
+RUN pip install --no-cache-dir flask flask-cors gunicorn
 
-# Railway 注入 PORT 环境变量
+# Railway 注入 PORT
 EXPOSE $PORT
 
-# 启动命令
-CMD python3 web_terminal.py
+# 使用 gunicorn 运行（稳定）
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "--threads", "4", "--timeout", "120", "web_terminal:app"]
