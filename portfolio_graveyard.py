@@ -265,7 +265,7 @@ def main():
         print(f"""
   {C_BOLD}{C_WHITE}┌─── 功能菜单 ────────────────────────────────────┐{C_RESET}
   {C_WHITE}│                                                       │{C_RESET}
-  {C_WHITE}│  {C_GREEN}[1]{C_RESET} 🪦 参观墓园（已有{tombstones}块墓碑）                  │{C_RESET}
+  {C_WHITE}│  {C_GREEN}[1]{C_RESET} 🪦 参观墓园（已有{len(tombstones)}块墓碑）              │{C_RESET}
   {C_WHITE}│  {C_YELLOW}[2]{C_RESET} ⚰️  下葬新持仓（添加亏损记录）                  │{C_RESET}
   {C_WHITE}│  {C_RED}[3]{C_RESET} 📊 墓园统计                                        │{C_RESET}
   {C_WHITE}│  {C_CYAN}[4]{C_RESET} 🕯️  点蜡烛祭奠                                      │{C_RESET}
