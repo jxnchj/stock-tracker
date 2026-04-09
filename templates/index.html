@@ -3,144 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Tracker - 终端程序集合</title>
+    <title>股民游乐场</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: #0d1117;
-            color: #e6edf3;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(180deg, #0b1020 0%, #131b31 100%);
+            color: #eef4ff;
             min-height: 100vh;
         }
-
-        .header {
-            background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%);
-            border-bottom: 1px solid #30363d;
-            padding: 24px 0;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 28px;
-            color: #58a6ff;
-            margin-bottom: 8px;
-        }
-
-        .header p {
-            color: #8b949e;
-            font-size: 14px;
-        }
-
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 32px 20px;
-        }
-
-        .apps-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 16px;
-        }
-
-        .app-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            color: inherit;
-            display: block;
-        }
-
-        .app-card:hover {
-            border-color: #58a6ff;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.1);
-        }
-
-        .app-card .app-id {
-            font-size: 12px;
-            color: #8b949e;
-            margin-bottom: 4px;
-        }
-
-        .app-card .app-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: #e6edf3;
-            margin-bottom: 8px;
-        }
-
-        .app-card .app-desc {
-            font-size: 13px;
-            color: #8b949e;
-            line-height: 1.5;
-        }
-
-        .app-card .run-hint {
-            margin-top: 12px;
-            font-size: 12px;
-            color: #58a6ff;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .app-card:hover .run-hint {
-            opacity: 1;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 32px;
-            color: #8b949e;
-            font-size: 13px;
-        }
-
-        .tips {
-            background: #1c2128;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 16px 20px;
+        .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 60px; }
+        .hero {
+            background: linear-gradient(135deg, rgba(89,124,255,.22), rgba(41,210,180,.12));
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 18px 50px rgba(0,0,0,.28);
             margin-bottom: 24px;
-            font-size: 13px;
-            color: #8b949e;
         }
-
-        .tips strong {
-            color: #e6edf3;
+        .hero h1 { font-size: 36px; margin-bottom: 10px; }
+        .hero p { color: #b9c5dc; line-height: 1.7; font-size: 16px; }
+        .meta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+        .chip {
+            font-size: 13px; color: #eff7ff; padding: 8px 12px;
+            border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+        }
+        h2 { font-size: 22px; margin: 24px 0 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .card {
+            display: block; text-decoration: none; color: inherit;
+            background: rgba(14, 20, 38, .92); border: 1px solid rgba(255,255,255,.08);
+            border-radius: 20px; padding: 20px; transition: .2s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,.18);
+        }
+        .card:hover { transform: translateY(-3px); border-color: rgba(111,154,255,.45); }
+        .card.locked { opacity: .72; }
+        .topline { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .tag {
+            font-size: 12px; padding: 6px 10px; border-radius: 999px; font-weight: 700;
+            background: rgba(41,210,180,.14); color: #7df0d8; border: 1px solid rgba(41,210,180,.35);
+        }
+        .tag.rebuild { background: rgba(255,196,92,.12); color: #ffd580; border-color: rgba(255,196,92,.28); }
+        .app-name { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
+        .app-desc { color: #b7c4da; line-height: 1.7; min-height: 74px; }
+        .app-help { margin-top: 14px; color: #7fa1ff; font-size: 13px; }
+        .footer-note {
+            margin-top: 28px; color: #8fa0bd; font-size: 13px; line-height: 1.7;
+            border-left: 3px solid rgba(125, 240, 216, .45); padding-left: 14px;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📊 Stock Tracker Terminal</h1>
-        <p>10个终端程序，在浏览器里跑 (・∀・)</p>
-    </div>
+    <div class="wrap">
+        <section class="hero">
+            <h1>股民游乐场</h1>
+            <p>这次不再假装“终端能跑”。我先把真正能在网页里跑通的作品单独拎出来，做成<strong>网页一次输入、真实执行、直接出结果</strong>的版本。先落地 4 个，剩下 6 个不再硬糊，统一标记为重构中。</p>
+            <div class="meta">
+                <span class="chip">先救活，再谈大而全</span>
+                <span class="chip">已落地 4 个</span>
+                <span class="chip">重构中 6 个</span>
+            </div>
+        </section>
 
-    <div class="container">
-        <div class="tips">
-            <strong>使用说明：</strong> 点击任意程序卡片进入终端，有些程序需要输入数据后按回车继续。
-            终端支持ANSI颜色，如果显示异常请刷新重试。
-        </div>
-
-        <div class="apps-grid">
-            {% for app_id, app in apps.items() %}
-            <a href="/terminal/{{ app_id }}" class="app-card">
-                <div class="app-id">#{{ app_id.split('-')[0] }}</div>
+        <h2>今天已经能玩的</h2>
+        <div class="grid">
+            {% for app_id, app in featured_apps.items() %}
+            <a class="card" href="/play/{{ app_id }}">
+                <div class="topline">
+                    <span class="tag">{{ app.badge }}</span>
+                    <span>#{{ app_id.split('-')[0] }}</span>
+                </div>
                 <div class="app-name">{{ app.name }}</div>
                 <div class="app-desc">{{ app.desc }}</div>
-                <div class="run-hint">→ 点击运行</div>
+                <div class="app-help">→ 点进去直接输参数，不再玩假终端回显</div>
             </a>
             {% endfor %}
         </div>
-    </div>
 
-    <div class="footer">
-        Stock Tracker Web Terminal | Synology NAS 1618+ | Python 3
+        <h2>正在重构，不再糊弄上线</h2>
+        <div class="grid">
+            {% for app_id, app in rebuilding_apps.items() %}
+            <div class="card locked">
+                <div class="topline">
+                    <span class="tag rebuild">{{ app.badge }}</span>
+                    <span>#{{ app_id.split('-')[0] }}</span>
+                </div>
+                <div class="app-name">{{ app.name }}</div>
+                <div class="app-desc">{{ app.desc }}</div>
+                <div class="app-help">这个玩法需要真正网页化，不再硬塞进 PTY 壳子</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="footer-note">
+            当前这版的目标只有一个：先给你看到真正落地的东西。能玩的就是能玩，不能玩的就老老实实标记“重构中”，不再拿半成品冒充进展。
+        </div>
     </div>
 </body>
 </html>
