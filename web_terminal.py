@@ -1,267 +1,194 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Web Terminal Service for Stock Tracker Apps
-Flask + threading 后端，SSE 输出 + 键盘输入
+批处理网页版入口。
+放弃在 PaaS 上不稳定的 PTY 终端，改成：网页输入 -> 后端一次性执行 -> 返回真实输出。
 """
 
 import os
+import re
 import sys
-import select
-import termios
-import tty
-import pty
-import fcntl
-import errno
-import signal
-import threading
-import queue as ThreadQueue
+import subprocess
+from pathlib import Path
 
-from flask import Flask, render_template, Response, request
+from flask import Flask, jsonify, render_template, request, redirect, url_for
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+APP_DIR = Path(__file__).resolve().parent
 
-# 程序目录
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+CLEAR_RE = re.compile(r'(\x1bc|\x1b\[2J|\x1b\[H|\x1b\[3J)')
 
-# 支持的程序列表
+
+def strip_ansi(text: str) -> str:
+    """清理 ANSI 颜色和清屏控制符，避免网页出现乱码。"""
+    text = CLEAR_RE.sub('', text or '')
+    return ANSI_RE.sub('', text)
+
+
 APPS = {
-    "1-fund-flow": {
-        "name": "主力资金流向博弈图",
-        "file": "fund_flow_battle.py",
-        "desc": "散户/机构/北向资金三方博弈实时模拟",
-    },
-    "2-limit-up": {
-        "name": "涨停敢死队模拟器",
-        "file": "limit_up_warrior.py",
-        "desc": "体验打板的快感，35%概率当日亏20%",
-    },
-    "3-kline-run": {
-        "name": "K线跑酷游戏",
-        "file": "kline_run.py",
-        "desc": "你就是蜡烛图，在K线丛林里跑酷躲闪",
-    },
-    "4-minesweeper": {
-        "name": "财报排雷大师",
-        "file": "financial_minesweeper.py",
-        "desc": "扫雷游戏，但扫的是财报地雷",
-    },
-    "5-sector-radar": {
-        "name": "板块轮动窥探器",
-        "file": "sector_radar.py",
-        "desc": "雷达图展示资金在板块间的轮动节奏",
-    },
     "6-break-even": {
         "name": "解套倒计时",
         "file": "break_even_countdown.py",
-        "desc": "输入成本和现价，算你还要多少年回本",
+        "desc": "输入成本、现价和股息率，直接给你回本年限和绝望指数。",
+        "status": "ready",
+        "badge": "已落地",
+        "input_help": "按顺序输入 3 行：成本价 / 当前价 / 预估股息率。最后留一个空行结束。",
+        "example_input": "10\n8\n3\n\n",
+        "featured": True,
     },
     "7-evolution": {
         "name": "散户心态进化史",
         "file": "retail_trading_evolution.py",
-        "desc": "根据入市年份生成你的心态进化血泪史",
+        "desc": "输入入市年份，生成你的 A 股心态进化报告。",
+        "status": "ready",
+        "badge": "已落地",
+        "input_help": "输入 1 行入市年份，例如 2018。最后留一个空行结束。",
+        "example_input": "2018\n\n",
+        "featured": True,
     },
     "8-guru": {
         "name": "每日股评嘴炮生成器",
         "file": "stock_guru_generator.py",
-        "desc": "大师预测报告，次日自动打脸",
+        "desc": "用菜单方式生成嘴炮股评、打脸回测和大师 Battle。",
+        "status": "ready",
+        "badge": "已落地",
+        "input_help": "输入菜单操作序列。例子里先看大师 Battle，再回车继续，最后输入 0 退出。",
+        "example_input": "1\n\n0\n",
+        "featured": True,
     },
     "9-graveyard": {
         "name": "持仓墓碑管理器",
         "file": "portfolio_graveyard.py",
-        "desc": "把亏钱的持仓当墓碑展示",
+        "desc": "给亏损持仓立墓碑，生成下葬证书和墓园统计。",
+        "status": "ready",
+        "badge": "已落地",
+        "input_help": "示例：随机选股、亏 12 万、收入墓园。依次输入：股票序号 / 亏损金额 / 是否收入墓园。",
+        "example_input": "\n12\ny\n0\n",
+        "featured": True,
     },
     "10-sentiment": {
         "name": "市场情绪温度计",
         "file": "market_sentiment_gauge.py",
-        "desc": "6维度综合计算市场情绪温度",
+        "desc": "原版是持续刷新型终端，不适合网页批处理，先暂停重构。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
+    },
+    "1-fund-flow": {
+        "name": "主力资金流向博弈图",
+        "file": "fund_flow_battle.py",
+        "desc": "原版偏实时终端玩法，先暂停重构。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
+    },
+    "2-limit-up": {
+        "name": "涨停敢死队模拟器",
+        "file": "limit_up_warrior.py",
+        "desc": "原版偏多轮交互，先暂停重构。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
+    },
+    "3-kline-run": {
+        "name": "K线跑酷游戏",
+        "file": "kline_run.py",
+        "desc": "原版需要连续按键，不适合 Railway 网页终端。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
+    },
+    "4-minesweeper": {
+        "name": "财报排雷大师",
+        "file": "financial_minesweeper.py",
+        "desc": "原版是逐步扫雷玩法，先暂停重构。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
+    },
+    "5-sector-radar": {
+        "name": "板块轮动窥探器",
+        "file": "sector_radar.py",
+        "desc": "原版偏终端动态展示，先暂停重构。",
+        "status": "rebuild",
+        "badge": "重构中",
+        "input_help": "这个版本暂不开放网页运行。",
+        "example_input": "",
+        "featured": False,
     },
 }
 
-# 存储运行中的进程信息: app_id -> {pid, master_fd, thread}
-running_procs = {}
-proc_lock = threading.Lock()
 
-
-def run_app_streaming(app_id, out_queue):
-    """通过 pty 运行程序，输出放入队列"""
-    if app_id not in APPS:
-        out_queue.put(("stderr", "未知程序: " + app_id + "\n"))
-        out_queue.put(("done", ""))
-        return
-
-    app_info = APPS[app_id]
-    app_path = os.path.join(APP_DIR, app_info["file"])
-
-    if not os.path.exists(app_path):
-        out_queue.put(("stderr", "文件不存在: " + app_path + "\n"))
-        out_queue.put(("done", ""))
-        return
-
-    master_fd, slave_fd = pty.openpty()
-    old_settings = termios.tcgetattr(slave_fd)
-    try:
-        tty.setraw(slave_fd)
-        termios.tcsetattr(slave_fd, termios.TCSADRAIN, old_settings)
-    except Exception:
-        pass
-
-    pid = os.fork()
-    if pid == 0:
-        # 子进程
-        os.close(master_fd)
-        os.dup2(slave_fd, 0)
-        os.dup2(slave_fd, 1)
-        os.dup2(slave_fd, 2)
-        os.close(slave_fd)
-        os.environ["TERM"] = "xterm-256color"
-        os.environ["COLUMNS"] = "120"
-        os.environ["LINES"] = "30"
-        try:
-            os.execvp("python3", ["python3", app_path])
-        except Exception:
-            os.execvp("python", ["python", app_path])
-        os._exit(1)
-
-    # 父进程
-    os.close(slave_fd)
-    flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-    fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-    # 注册进程
-    with proc_lock:
-        running_procs[app_id] = {"pid": pid, "master_fd": master_fd}
-
-    try:
-        while True:
-            r, _, _ = select.select([master_fd], [], [], 0.5)
-            if master_fd in r:
-                try:
-                    data = os.read(master_fd, 4096)
-                    if data:
-                        out_queue.put(("stdout", data.decode("utf-8", errors="replace")))
-                    else:
-                        break
-                except OSError as e:
-                    if e.errno != errno.EIO:
-                        break
-                    break
-            result, _ = os.waitpid(pid, os.WNOHANG)
-            if result != 0:
-                break
-    finally:
-        with proc_lock:
-            if app_id in running_procs:
-                del running_procs[app_id]
-        os.close(master_fd)
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except Exception:
-            pass
-
-    out_queue.put(("done", ""))
-
-
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("index.html", apps=APPS)
+    featured_apps = {k: v for k, v in APPS.items() if v.get('featured')}
+    rebuilding_apps = {k: v for k, v in APPS.items() if not v.get('featured')}
+    return render_template('index.html', featured_apps=featured_apps, rebuilding_apps=rebuilding_apps)
 
 
-@app.route("/terminal/<app_id>")
-def terminal_page(app_id):
-    if app_id not in APPS:
-        return "未知程序", 404
-    return render_template(
-        "terminal.html",
-        app_id=app_id,
-        app_name=APPS[app_id]["name"],
-        app_desc=APPS[app_id]["desc"]
-    )
+@app.route('/terminal/<app_id>')
+def old_terminal_redirect(app_id):
+    return redirect(url_for('play_app', app_id=app_id))
 
 
-@app.route("/stream/<app_id>")
-def stream(app_id):
-    """SSE 端点"""
-    if app_id not in APPS:
-        return "未知程序", 404
-
-    def generate():
-        out_queue = ThreadQueue.Queue()
-        t = threading.Thread(target=run_app_streaming, args=(app_id, out_queue))
-        t.daemon = True
-        t.start()
-
-        while True:
-            try:
-                msg_type, data = out_queue.get(timeout=30)
-                if msg_type == "done":
-                    break
-                # SSE 格式
-                yield "data: " + data + "\n\n"
-            except ThreadQueue.Empty:
-                # 超时发送空行保持连接
-                yield "data: \n\n"
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
-    )
+@app.route('/play/<app_id>')
+def play_app(app_id):
+    app_info = APPS.get(app_id)
+    if not app_info:
+        return '未知程序', 404
+    return render_template('terminal.html', app_id=app_id, app_info=app_info)
 
 
-@app.route("/input/<app_id>", methods=["POST"])
-def input_to_app(app_id):
-    """接收键盘输入，发送给运行中的程序"""
-    if app_id not in APPS:
-        return "未知程序", 404
+@app.route('/run/<app_id>', methods=['POST'])
+def run_app_once(app_id):
+    app_info = APPS.get(app_id)
+    if not app_info:
+        return jsonify({'ok': False, 'error': '未知程序'}), 404
 
-    data = request.get_json()
-    key = data.get("key", "")
+    if app_info.get('status') != 'ready':
+        return jsonify({'ok': False, 'error': '这个程序还在重构中，暂不开放网页运行。'}), 400
 
-    with proc_lock:
-        proc_info = running_procs.get(app_id)
-
-    if proc_info is None:
-        return "程序未运行", 400
-
-    master_fd = proc_info["master_fd"]
+    payload = request.get_json(silent=True) or {}
+    user_input = payload.get('user_input', '')
+    app_path = APP_DIR / app_info['file']
+    if not app_path.exists():
+        return jsonify({'ok': False, 'error': f'脚本不存在：{app_info["file"]}'}), 500
 
     try:
-        # 发送按键到 pty
-        if key == "Enter":
-            os.write(master_fd, b"\r")
-        elif key == "Backspace":
-            os.write(master_fd, b"\177")
-        elif key == "ArrowUp":
-            os.write(master_fd, b"\x1b[A")
-        elif key == "ArrowDown":
-            os.write(master_fd, b"\x1b[B")
-        elif key == "ArrowLeft":
-            os.write(master_fd, b"\x1b[D")
-        elif key == "ArrowRight":
-            os.write(master_fd, b"\x1b[C")
-        elif key == "Escape":
-            os.write(master_fd, b"\x1b")
-        elif key == "Tab":
-            os.write(master_fd, b"\t")
-        else:
-            # 普通字符
-            os.write(master_fd, key.encode("utf-8"))
-    except OSError:
-        return "写入失败", 500
+        result = subprocess.run(
+            [sys.executable, str(app_path)],
+            input=user_input,
+            capture_output=True,
+            text=True,
+            timeout=45,
+            cwd=str(APP_DIR),
+            env={**os.environ, 'TERM': 'xterm-256color'},
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'error': '运行超时了。这个程序更适合改造成真正网页，不适合继续假装终端。'}), 504
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': f'运行失败：{exc}'}), 500
 
-    return "ok"
+    merged = (result.stdout or '') + ('\n' + result.stderr if result.stderr else '')
+    cleaned = strip_ansi(merged).strip() or '程序没有返回内容。'
+    return jsonify({
+        'ok': result.returncode == 0,
+        'returncode': result.returncode,
+        'output': cleaned,
+    })
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print("=" * 50)
-    print("Stock Tracker Web Terminal Service")
-    print("Port:", port)
-    print("=" * 50)
-
-    # Railway 用 gunicorn 或直接运行
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port, debug=False)
