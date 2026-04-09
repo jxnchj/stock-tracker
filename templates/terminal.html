@@ -3,597 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }} - Stock Tracker</title>
+    <title>{{ app_info.name }}</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: #0d1117;
-            color: #e6edf3;
-            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(180deg, #0b1020 0%, #131b31 100%);
+            color: #eef4ff;
+            min-height: 100vh;
         }
-
-        .top-bar {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-shrink: 0;
+        .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; }
+        .back {
+            color: #dbe7ff; text-decoration: none; background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px 14px;
         }
-
-        .back-btn {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #e6edf3;
-            padding: 6px 14px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 13px;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            transition: all 0.2s;
+        .badge {
+            font-size: 12px; padding: 8px 12px; border-radius: 999px; font-weight: 700;
+            background: rgba(41,210,180,.14); color: #7df0d8; border: 1px solid rgba(41,210,180,.35);
         }
-
-        .back-btn:hover { background: #30363d; border-color: #8b949e; }
-
-        .app-info { flex: 1; }
-        .app-info .app-name { font-size: 15px; font-weight: 600; font-family: -apple-system, sans-serif; }
-        .app-info .app-desc { font-size: 12px; color: #8b949e; margin-top: 2px; }
-
-        .status {
-            font-size: 12px; padding: 4px 10px; border-radius: 12px;
-            background: #21262d; color: #8b949e;
+        .hero {
+            background: rgba(13, 19, 36, .9); border: 1px solid rgba(255,255,255,.08); border-radius: 24px;
+            padding: 24px; margin-bottom: 18px; box-shadow: 0 15px 40px rgba(0,0,0,.24);
         }
-        .status.running { background: #0d4429; color: #3fb950; }
-
-        .terminal-wrapper { flex: 1; overflow: hidden; padding: 12px; }
-
-        #terminal {
-            height: 100%; background: #0d1117; border-radius: 8px;
-            padding: 12px; overflow-y: auto; font-size: 14px; line-height: 1.5;
-            white-space: pre-wrap; word-break: break-all;
+        .hero h1 { font-size: 32px; margin-bottom: 10px; }
+        .hero p { color: #b7c4da; line-height: 1.8; }
+        .layout { display: grid; grid-template-columns: 360px 1fr; gap: 18px; }
+        .panel {
+            background: rgba(13, 19, 36, .92); border: 1px solid rgba(255,255,255,.08); border-radius: 24px;
+            padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.18);
         }
-
-        #terminal::-webkit-scrollbar { width: 8px; }
-        #terminal::-webkit-scrollbar-track { background: #161b22; }
-        #terminal::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
-
-        .actions {
-            padding: 8px 20px; background: #161b22;
-            border-top: 1px solid #30363d; display: flex; gap: 8px; flex-shrink: 0;
+        .panel h2 { font-size: 18px; margin-bottom: 12px; }
+        .help { color: #b7c4da; line-height: 1.8; font-size: 14px; }
+        .example {
+            margin-top: 14px; background: #09111f; border: 1px solid rgba(255,255,255,.08); border-radius: 16px;
+            padding: 14px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+            color: #d4e1ff;
         }
-
-        .action-btn {
-            background: #21262d; border: 1px solid #30363d; color: #e6edf3;
-            padding: 5px 12px; border-radius: 6px; font-size: 12px;
-            cursor: pointer; font-family: -apple-system, sans-serif; transition: all 0.2s;
+        textarea {
+            width: 100%; min-height: 220px; resize: vertical; border-radius: 16px; border: 1px solid rgba(255,255,255,.12);
+            background: #09111f; color: #eff4ff; padding: 16px; font-size: 14px; line-height: 1.7;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
-        .action-btn:hover { background: #30363d; }
-        .action-btn.danger { border-color: #f85149; color: #f85149; }
-        .action-btn.danger:hover { background: #f8514922; }
-
-        /* 输入框 */
-        #input-line {
-            display: flex; align-items: center;
-            padding: 6px 12px; background: #161b22;
-            border-top: 1px solid #30363d; gap: 8px;
+        .actions { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+        button {
+            border: none; border-radius: 14px; padding: 12px 16px; cursor: pointer; font-weight: 700;
         }
-        #input-line .prompt {
-            color: #58a6ff; font-size: 14px; white-space: nowrap;
+        .primary { background: linear-gradient(135deg, #6b8bff, #4fd0b7); color: #07101d; }
+        .secondary { background: rgba(255,255,255,.08); color: #eff4ff; border: 1px solid rgba(255,255,255,.1); }
+        .output {
+            margin-top: 16px; min-height: 360px; background: #07101d; border: 1px solid rgba(255,255,255,.08); border-radius: 18px;
+            padding: 18px; white-space: pre-wrap; line-height: 1.7; font-size: 14px; overflow: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e4ecff;
         }
-        #cmd-input {
-            flex: 1; background: #0d1117; border: 1px solid #30363d;
-            color: #e6edf3; padding: 6px 10px; border-radius: 4px;
-            font-family: inherit; font-size: 14px; outline: none;
+        .hint { color: #8ea2c4; font-size: 13px; margin-top: 12px; line-height: 1.7; }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
         }
-        #cmd-input:focus { border-color: #58a6ff; }
     </style>
 </head>
 <body>
-    <div class="top-bar">
-        <a href="/" class="back-btn">← 返回</a>
-        <div class="app-info">
-            <div class="app-name">{{ app_name }}</div>
-            <div class="app-desc">{{ app_desc }}</div>
+    <div class="wrap">
+        <div class="topbar">
+            <a class="back" href="/">← 返回首页</a>
+            <span class="badge">{{ app_info.badge }}</span>
         </div>
-        <div class="status" id="status">正在连接...</div>
-    </div>
 
-    <div class="terminal-wrapper">
-        <div id="terminal"></div>
-    </div>
+        <section class="hero">
+            <h1>{{ app_info.name }}</h1>
+            <p>{{ app_info.desc }}</p>
+        </section>
 
-    <div class="actions">
-        <button class="action-btn" onclick="clearTerm()">清屏</button>
-        <button class="action-btn danger" onclick="restartApp()">重启</button>
-    </div>
+        <div class="layout">
+            <section class="panel">
+                <h2>怎么玩</h2>
+                <div class="help">{{ app_info.input_help }}</div>
+                <div class="example" id="exampleText">{{ app_info.example_input }}</div>
+                <div class="hint">说明：这里不是假终端。你输入什么，后端就真的拿去执行脚本，再把真实输出返回。</div>
+            </section>
 
-    <div id="input-line">
-        <span class="prompt">$</span>
-        <input type="text" id="cmd-input" placeholder="输入内容后按回车发送..." autocomplete="off" autofocus />
+            <section class="panel">
+                <h2>输入区</h2>
+                <textarea id="userInput" placeholder="把输入按行写在这里...">{{ app_info.example_input }}</textarea>
+                <div class="actions">
+                    <button class="primary" id="runBtn">运行</button>
+                    <button class="secondary" id="fillBtn">填入示例</button>
+                    <button class="secondary" id="clearBtn">清空输入</button>
+                </div>
+                <div class="output" id="output">点“运行”后，这里会显示脚本真实输出。</div>
+            </section>
+        </div>
     </div>
 
     <script>
-    (function() {
-        const termEl = document.getElementById("terminal");
-        const statusEl = document.getElementById("status");
-        const appId = "{{ app_id }}";
-        let es = null;
+        const runBtn = document.getElementById('runBtn');
+        const fillBtn = document.getElementById('fillBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const userInput = document.getElementById('userInput');
+        const output = document.getElementById('output');
+        const example = document.getElementById('exampleText').textContent;
+        const appId = '{{ app_id }}';
 
-        // ==========================================
-        //  输入缓冲区：积累不完整的 CSI 序列
-        // ==========================================
-        let inputBuffer = "";
+        fillBtn.addEventListener('click', () => { userInput.value = example; });
+        clearBtn.addEventListener('click', () => { userInput.value = ''; });
 
-        // ==========================================
-        //  完整 ANSI 解析器
-        // ==========================================
-
-        // CSI 序列参数解析
-        function parseCSI(params, finalByte) {
-            const p = { intermediates: [], params: [], final: finalByte };
-            let cur = "";
-            for (let i = 0; i < params.length; i++) {
-                const c = params[i];
-                if (c >= 0x30 && c <= 0x3B) {
-                    cur += String.fromCharCode(c);
-                } else if (c === 0x3C || c === 0x3D || c === 0x3E) {
-                    p.intermediates.push(String.fromCharCode(c));
-                } else {
-                    p.final = String.fromCharCode(c);
-                    if (cur) { p.params.push(cur === "" ? "" : parseInt(cur, 10) || 0); }
-                    cur = "";
-                }
-            }
-            if (cur) p.params.push(parseInt(cur, 10) || 0);
-            return p;
-        }
-
-        // 颜色表 (ANSI 256色)
-        const ANSI_COLORS = [
-            /* 0-15 标准色 */
-            "#000000","#c51e14","#1ac723","#f5c400",
-            "#1c40cc","#a030c7","#0db7c4","#b2b2b2",
-            "#6e6e6e","#ff5f50","#30e060","#fffc3c",
-            "#3c6eff","#ff50ff","#3ce0f0","#ffffff",
-        ];
-
-        function rgbHex(r, g, b) {
-            return "#" + [r, g, b].map(v => v.toString(16).padStart(2,"0")).join("");
-        }
-
-        function ansi256(idx) {
-            if (idx < 16) return ANSI_COLORS[idx];
-            if (idx < 232) {
-                idx -= 16;
-                return rgbHex(
-                    Math.round(255 * ((idx / 36) % 6) / 5),
-                    Math.round(255 * ((idx / 6) % 6) / 5),
-                    Math.round(255 * (idx % 6) / 5)
-                );
-            }
-            const g = Math.round(255 * ((idx - 232) / 23));
-            return rgbHex(g, g, g);
-        }
-
-        // 当前文字样式状态
-        let style = {
-            bold: false, dim: false, italic: false, underline: false,
-            fg: "#e6edf3", bg: "transparent",
-            fgOriginal: null, bgOriginal: null,
-        };
-
-        function resetStyle() {
-            style = { bold: false, dim: false, italic: false, underline: false,
-                      fg: "#e6edf3", bg: "transparent",
-                      fgOriginal: null, bgOriginal: null };
-        }
-
-        function buildStyleAttr() {
-            const s = [];
-            s.push("color:" + style.fg);
-            if (style.bg !== "transparent") s.push("background:" + style.bg);
-            if (style.bold) s.push("font-weight:bold");
-            if (style.dim) s.push("opacity:0.7");
-            if (style.italic) s.push("font-style:italic");
-            if (style.underline) s.push("text-decoration:underline");
-            return s.join(";");
-        }
-
-        // 终端缓冲区
-        let termBuffer = [];   // 每行: [text, styleObj]
-        let cursorY = 0, cursorX = 0;
-
-        function ensureLine(y) {
-            while (termBuffer.length <= y) {
-                termBuffer.push([]);
-            }
-        }
-
-        function insertChars(text, y, x) {
-            ensureLine(y);
-            const line = termBuffer[y];
-            line.splice(x, 0, ...text.split("").map(c => ({ c, style: {...style} })));
-        }
-
-        function flushBuffer() {
-            // 把 buffer 渲染到 DOM
-            termEl.innerHTML = "";
-            for (const line of termBuffer) {
-                if (line.length === 0) {
-                    const br = document.createElement("br");
-                    termEl.appendChild(br);
-                    continue;
-                }
-                let openStyle = null;
-                let spanClass = null;
-                let currentRun = "";
-
-                for (const seg of line) {
-                    const segStyle = buildStyleAttrForSeg(seg.style);
-                    if (segStyle !== openStyle) {
-                        if (currentRun) {
-                            const span = document.createElement("span");
-                            span.setAttribute("style", openStyle);
-                            span.textContent = currentRun;
-                            termEl.appendChild(span);
-                            currentRun = "";
-                        }
-                        openStyle = segStyle;
-                    }
-                    currentRun += seg.c;
-                }
-                if (currentRun) {
-                    const span = document.createElement("span");
-                    span.setAttribute("style", openStyle);
-                    span.textContent = currentRun;
-                    termEl.appendChild(span);
-                }
-                termEl.appendChild(document.createElement("br"));
-            }
-            termEl.scrollTop = termEl.scrollHeight;
-        }
-
-        function buildStyleAttrForSeg(s) {
-            const attrs = [];
-            attrs.push("color:" + s.fg);
-            if (s.bg !== "transparent") attrs.push("background:" + s.bg);
-            if (s.bold) attrs.push("font-weight:bold");
-            if (s.dim) attrs.push("opacity:0.7");
-            return attrs.join(";");
-        }
-
-        function appendChars(text) {
-            const lines = text.split("\n");
-            for (let i = 0; i < lines.length; i++) {
-                const lineText = lines[i];
-                if (i === 0) {
-                    // 追加到当前行
-                    ensureLine(cursorY);
-                    const line = termBuffer[cursorY];
-                    for (const c of lineText) {
-                        line.push({ c, style: {...style} });
-                    }
-                    cursorX += lineText.length;
-                } else {
-                    // 新行
-                    cursorY++;
-                    cursorX = 0;
-                    if (lineText) {
-                        ensureLine(cursorY);
-                        const line = termBuffer[cursorY];
-                        for (const c of lineText) {
-                            line.push({ c, style: {...style} });
-                        }
-                        cursorX = lineText.length;
-                    }
-                }
-            }
-            flushBuffer();
-        }
-
-        function clearScreen(mode) {
-            if (mode === 2 || mode === 3) {
-                termBuffer = [];
-                cursorY = 0; cursorX = 0;
-            } else {
-                // mode 1: 清当前行及之前  mode 0: 清当前行及之后
-                if (mode === 1) {
-                    ensureLine(cursorY);
-                    termBuffer[cursorY] = termBuffer[cursorY].slice(cursorX);
-                    cursorX = 0;
-                } else {
-                    ensureLine(cursorY);
-                    termBuffer[cursorY] = termBuffer[cursorY].slice(0, cursorX);
-                }
-            }
-            flushBuffer();
-        }
-
-        function eraseLine(mode) {
-            ensureLine(cursorY);
-            if (mode === 2 || mode === 0) {
-                termBuffer[cursorY] = termBuffer[cursorY].slice(0, cursorX);
-            } else if (mode === 1) {
-                termBuffer[cursorY] = termBuffer[cursorY].slice(cursorX);
-            }
-            flushBuffer();
-        }
-
-        function moveCursor(y, x) {
-            cursorY = Math.max(0, y);
-            cursorX = Math.max(0, x);
-        }
-
-        function handleCSI(bytes) {
-            if (bytes.length < 2) return;
-            const final = bytes[bytes.length - 1];
-            const params = bytes.slice(0, -1);
-            const parsed = parseCSI(params.length ? params : [0x30], final);
-            const cmd = parsed.final;
-            const p0 = parsed.params[0] || 1;
-            const p1 = parsed.params.length > 1 ? parsed.params[1] : 1;
-
-            switch (cmd) {
-                case "H": // cursor position (also used for CUP and tab stops)
-                case "f":
-                    moveCursor(p0 - 1, p1 - 1);
-                    break;
-                case "J":
-                    clearScreen(p0);
-                    break;
-                case "K":
-                    eraseLine(p0);
-                    break;
-                case "m": // SGR - color/style
-                    let i = 0;
-                    while (i < parsed.params.length) {
-                        const code = parsed.params[i];
-                        if (code === 0 || code === null) {
-                            resetStyle();
-                        } else if (code === 1) {
-                            style.bold = true;
-                        } else if (code === 2) {
-                            style.dim = true;
-                        } else if (code === 3) {
-                            style.italic = true;
-                        } else if (code === 4) {
-                            style.underline = true;
-                        } else if (code === 22) {
-                            style.bold = false; style.dim = false;
-                        } else if (code === 23) {
-                            style.italic = false;
-                        } else if (code === 24) {
-                            style.underline = false;
-                        } else if (code === 27) {
-                            style.inverse = false;
-                        } else if (code === 30) {
-                            style.fg = "#8b949e";
-                        } else if (code === 31) {
-                            style.fg = "#ff7b72";
-                        } else if (code === 32) {
-                            style.fg = "#3fb950";
-                        } else if (code === 33) {
-                            style.fg = "#d29922";
-                        } else if (code === 34) {
-                            style.fg = "#58a6ff";
-                        } else if (code === 35) {
-                            style.fg = "#bc8cff";
-                        } else if (code === 36) {
-                            style.fg = "#39c5cf";
-                        } else if (code === 37) {
-                            style.fg = "#e6edf3";
-                        } else if (code === 39) {
-                            style.fg = "#e6edf3";
-                        } else if (code === 40) {
-                            style.bg = "#6e6e6e";
-                        } else if (code === 41) {
-                            style.bg = "#c51e14";
-                        } else if (code === 42) {
-                            style.bg = "#1ac723";
-                        } else if (code === 43) {
-                            style.bg = "#f5c400";
-                        } else if (code === 44) {
-                            style.bg = "#1c40cc";
-                        } else if (code === 45) {
-                            style.bg = "#a030c7";
-                        } else if (code === 46) {
-                            style.bg = "#0db7c4";
-                        } else if (code === 47) {
-                            style.bg = "#b2b2b2";
-                        } else if (code === 49) {
-                            style.bg = "transparent";
-                        } else if (code === 90) {
-                            style.fg = "#8b949e";
-                        } else if (code === 91) {
-                            style.fg = "#ff7b72";
-                        } else if (code === 92) {
-                            style.fg = "#3fb950";
-                        } else if (code === 93) {
-                            style.fg = "#d29922";
-                        } else if (code === 94) {
-                            style.fg = "#58a6ff";
-                        } else if (code === 95) {
-                            style.fg = "#bc8cff";
-                        } else if (code === 96) {
-                            style.fg = "#39c5cf";
-                        } else if (code === 97) {
-                            style.fg = "#ffffff";
-                        } else if (code === 98) {
-                            style.fg = "#ff5f50";
-                        } else if (code === 99) {
-                            style.bg = "#3c6eff";
-                        } else if (code === 38 || code === 48) {
-                            // 扩展颜色: 38;5;n 或 38;2;r;g;b
-                            const isFg = code === 38;
-                            i++;
-                            if (parsed.params[i] === 5 && i < parsed.params.length) {
-                                // 256色
-                                const idx = parsed.params[i++];
-                                if (isFg) style.fg = ansi256(idx);
-                                else style.bg = ansi256(idx);
-                            } else if (parsed.params[i] === 2 && i + 3 < parsed.params.length) {
-                                // 真彩色
-                                const r = parsed.params[i+1];
-                                const g = parsed.params[i+2];
-                                const b = parsed.params[i+3];
-                                i += 4;
-                                if (isFg) style.fg = rgbHex(r, g, b);
-                                else style.bg = rgbHex(r, g, b);
-                            }
-                            continue; // 不要 i++
-                        }
-                        i++;
-                    }
-                    break;
-                case "A": moveCursor(cursorY - p0, cursorX); break;
-                case "B": moveCursor(cursorY + p0, cursorX); break;
-                case "C": moveCursor(cursorY, cursorX + p0); break;
-                case "D": moveCursor(cursorY, cursorX - p0); break;
-                case "G": cursorX = p0 - 1; break;
-                case "d": cursorY = p0 - 1; break;
-                case "h":
-                    // ignore (some set modes)
-                    break;
-                case "l":
-                    // ignore (some reset modes)
-                    break;
-                default:
-                    // 未知命令，忽略
-                    break;
-            }
-        }
-
-        // 完整 ANSI 解析
-        function parseAnsiText(rawText) {
-            // 逐字符扫描
-            let i = 0;
-            let output = "";
-
-            while (i < rawText.length) {
-                const byte = rawText.charCodeAt(i);
-
-                if (byte === 0x1b) { // ESC
-                    const next = rawText.charCodeAt(i + 1);
-                    if (next === 0x5b) {
-                        // CSI 序列: ESC [
-                        let j = i + 2;
-                        while (j < rawText.length && j < i + 20) {
-                            const b = rawText.charCodeAt(j);
-                            if ((b >= 0x40 && b <= 0x7E) || j - i > 18) {
-                                // 找到最终字节
-                                handleCSI(rawText.slice(i + 2, j + 1).split("").map(c => c.charCodeAt(0)));
-                                i = j + 1;
-                                break;
-                            }
-                            j++;
-                        }
-                        if (j >= rawText.length || j - i > 18) {
-                            i++; // skip lone ESC
-                        }
-                    } else if (next === 0x5d) {
-                        // OSC 序列: ESC ] (忽略，如窗口标题)
-                        let j = i + 2;
-                        while (j < rawText.length) {
-                            if (rawText.charCodeAt(j) === 0x07 || (rawText.charCodeAt(j) === 0x1b && rawText.charCodeAt(j+1) === 0x5c)) {
-                                i = j + (rawText.charCodeAt(j) === 0x07 ? 1 : 2);
-                                break;
-                            }
-                            j++;
-                        }
-                        if (j >= rawText.length) i++;
-                    } else {
-                        i++; // 跳过独立 ESC
-                    }
-                } else if (byte === 0x0D || byte === 0x08) {
-                    // CR 或 backspace
-                    i++;
-                } else {
-                    // 普通字符
-                    output += rawText[i];
-                    i++;
-                }
-            }
-
-            return output;
-        }
-
-        function appendOutput(text) {
-            if (!text) return;
-            // 先解析 ANSI，再追加
-            const clean = parseAnsiText(text);
-            if (clean) appendChars(clean);
-        }
-
-        function clearTerm() {
-            termBuffer = [];
-            cursorY = 0; cursorX = 0;
-            termEl.innerHTML = "";
-        }
-
-        function restartApp() {
-            if (es) es.close();
-            clearTerm();
-            connect();
-        }
-
-        // 输入框 - 回车发送
-        var cmdInput = document.getElementById("cmd-input");
-        cmdInput.addEventListener("keydown", function(e) {
-            if (e.key === "Enter") {
-                var val = cmdInput.value;
-                if (val.length > 0) {
-                    // 发送到后端
-                    fetch("/input/" + appId, {
-                        method: "POST",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({key: val})
-                    }).catch(function(err) {
-                        console.log("input error:", err);
-                    });
-                    // 显示用户输入
-                    appendChars("\r");
-                    appendChars(val + "\r");
-                    cmdInput.value = "";
-                }
-            } else if (e.key === "Backspace") {
-                fetch("/input/" + appId, {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({key: "Backspace"})
-                }).catch(function() {});
+        runBtn.addEventListener('click', async () => {
+            runBtn.disabled = true;
+            runBtn.textContent = '运行中...';
+            output.textContent = '正在执行，请稍等...';
+            try {
+                const res = await fetch(`/run/${appId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_input: userInput.value })
+                });
+                const data = await res.json();
+                output.textContent = data.ok ? data.output : `运行失败\n\n${data.error || data.output || '未知错误'}`;
+            } catch (err) {
+                output.textContent = `请求失败\n\n${err}`;
+            } finally {
+                runBtn.disabled = false;
+                runBtn.textContent = '运行';
             }
         });
-
-        function connect() {
-            statusEl.textContent = "正在连接...";
-            statusEl.className = "status";
-
-            es = new EventSource("/stream/" + appId);
-
-            es.onopen = function() {
-                statusEl.textContent = "● 运行中";
-                statusEl.className = "status running";
-            };
-
-            es.onmessage = function(event) {
-                appendOutput(event.data);
-            };
-
-            es.onerror = function() {
-                statusEl.textContent = "已断开";
-                statusEl.className = "status";
-                es.close();
-                appendOutput("\n\n[连接已断开，请点击「重启」重新运行]\n");
-            };
-        }
-
-        connect();
-    })();
     </script>
 </body>
 </html>
