@@ -245,7 +245,7 @@ def main():
   {C_WHITE}│  {C_CYAN}[4]{C_RESET} 生成今日预测报告（次日自动打脸）              │{C_RESET}
   {C_WHITE}│  {C_RED}[0]{C_RESET} 退出                                             │{C_RESET}
   {C_WHITE}│                                                       │{C_RESET}
-  {BOLD}{C_WHITE}└───────────────────────────────────────────────────────┘{C_RESET}
+  {C_BOLD}{C_WHITE}└───────────────────────────────────────────────────────┘{C_RESET}
 """)
         choice = input(f"  {C_CYAN}请选择: {C_RESET}").strip()
         if choice == "1":
